@@ -21,9 +21,10 @@ function drawRoundedRect(context, x, y, width, height, radius) {
   context.closePath();
 }
 
-export default function GameCanvas({ gameState, playerId }) {
+export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIntent }) {
   const wrapperRef = useRef(null);
   const canvasRef = useRef(null);
+  const touchStartRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
@@ -39,6 +40,53 @@ export default function GameCanvas({ gameState, playerId }) {
     observer.observe(wrapperRef.current);
     return () => observer.disconnect();
   }, []);
+
+  function resolveSwipeDirection(deltaX, deltaY) {
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      return deltaX > 0 ? "right" : "left";
+    }
+
+    return deltaY > 0 ? "down" : "up";
+  }
+
+  function handleTouchStart(event) {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      startedAt: Date.now(),
+    };
+  }
+
+  function handleTouchEnd(event) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+
+    const touch = event.changedTouches[0];
+    if (!start || !touch) {
+      return;
+    }
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const distance = Math.hypot(deltaX, deltaY);
+    const duration = Date.now() - start.startedAt;
+    const swipeThreshold = 24;
+    const tapThreshold = 14;
+
+    if (distance >= swipeThreshold) {
+      onMoveIntent?.(resolveSwipeDirection(deltaX, deltaY));
+      return;
+    }
+
+    if (distance <= tapThreshold && duration < 250) {
+      onTrapIntent?.();
+    }
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -161,7 +209,15 @@ export default function GameCanvas({ gameState, playerId }) {
 
   return (
     <div ref={wrapperRef} className="canvas-wrapper">
-      <canvas ref={canvasRef} className="game-canvas" />
+      <canvas
+        ref={canvasRef}
+        className="game-canvas"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
+      />
       {!gameState ? <div className="canvas-placeholder">Waiting for the first synchronized game state...</div> : null}
     </div>
   );

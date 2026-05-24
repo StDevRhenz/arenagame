@@ -33,6 +33,14 @@ export default function App() {
   const [playerId, setPlayerId] = useState("");
   const [gameState, setGameState] = useState(null);
 
+  function sendIntent(intent) {
+    if (!socket || connectionStatus !== "connected") {
+      return;
+    }
+
+    socket.emit("game:intent", intent);
+  }
+
   useEffect(() => {
     const client = io(SERVER_URL, {
       transports: ["websocket", "polling"],
@@ -72,17 +80,13 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (!socket || connectionStatus !== "connected") {
-        return;
-      }
-
       if (event.repeat) {
         return;
       }
 
       const direction = keyToDirection(event.key);
       if (direction) {
-        socket.emit("game:intent", {
+        sendIntent({
           type: "move",
           direction,
         });
@@ -91,7 +95,7 @@ export default function App() {
 
       if (event.code === "Space") {
         event.preventDefault();
-        socket.emit("game:intent", {
+        sendIntent({
           type: "trap",
         });
       }
@@ -100,6 +104,19 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [socket, connectionStatus]);
+
+  function handleMoveIntent(direction) {
+    sendIntent({
+      type: "move",
+      direction,
+    });
+  }
+
+  function handleTrapIntent() {
+    sendIntent({
+      type: "trap",
+    });
+  }
 
   const players = useMemo(() => gameState?.players ?? [], [gameState]);
   const leaderboard = useMemo(() => {
@@ -132,7 +149,28 @@ export default function App() {
 
       <section className="content-grid">
         <article className="arena-panel">
-          <GameCanvas gameState={gameState} playerId={playerId} />
+          <GameCanvas
+            gameState={gameState}
+            playerId={playerId}
+            onMoveIntent={handleMoveIntent}
+            onTrapIntent={handleTrapIntent}
+          />
+
+          <div className="touch-controls" aria-label="Touch controls">
+            <div className="dpad">
+              <span />
+              <button type="button" onClick={() => handleMoveIntent("up")}>▲</button>
+              <span />
+              <button type="button" onClick={() => handleMoveIntent("left")}>◀</button>
+              <button type="button" className="touch-center" onClick={handleTrapIntent}>
+                Trap
+              </button>
+              <button type="button" onClick={() => handleMoveIntent("right")}>▶</button>
+              <span />
+              <button type="button" onClick={() => handleMoveIntent("down")}>▼</button>
+              <span />
+            </div>
+          </div>
         </article>
 
         <aside className="sidebar">
@@ -140,6 +178,7 @@ export default function App() {
             <h2>Controls</h2>
             <ul>
               <li>Move with WASD or the arrow keys.</li>
+              <li>On mobile, swipe the arena or use the on-screen buttons.</li>
               <li>Press Space to place a trap after collecting trap charges.</li>
               <li>Avoid walls, obstacles, and active traps.</li>
             </ul>
