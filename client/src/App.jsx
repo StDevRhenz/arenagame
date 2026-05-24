@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import GameCanvas from "./components/GameCanvas.jsx";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:4000";
+const MUSIC_SRC = "/music/background.mp3";
 
 function keyToDirection(key) {
   switch (key) {
@@ -32,6 +33,10 @@ export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("connecting");
   const [playerId, setPlayerId] = useState("");
   const [gameState, setGameState] = useState(null);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicReady, setMusicReady] = useState(false);
+  const audioRef = useRef(null);
+  const holdIntervalRef = useRef(null);
 
   function sendIntent(intent) {
     if (!socket || connectionStatus !== "connected") {
@@ -118,6 +123,46 @@ export default function App() {
     });
   }
 
+  function startHold(direction) {
+    handleMoveIntent(direction);
+    if (holdIntervalRef.current) {
+      window.clearInterval(holdIntervalRef.current);
+    }
+
+    holdIntervalRef.current = window.setInterval(() => {
+      handleMoveIntent(direction);
+    }, 140);
+  }
+
+  function stopHold() {
+    if (!holdIntervalRef.current) {
+      return;
+    }
+
+    window.clearInterval(holdIntervalRef.current);
+    holdIntervalRef.current = null;
+  }
+
+  async function toggleMusic() {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    if (audio.paused) {
+      try {
+        await audio.play();
+        setMusicEnabled(true);
+      } catch {
+        setMusicEnabled(false);
+      }
+      return;
+    }
+
+    audio.pause();
+    setMusicEnabled(false);
+  }
+
   const players = useMemo(() => gameState?.players ?? [], [gameState]);
   const leaderboard = useMemo(() => {
     return [...players].sort((left, right) => right.score - left.score).slice(0, 5);
@@ -144,6 +189,10 @@ export default function App() {
             <span>Player ID</span>
             <strong>{playerId || "waiting"}</strong>
           </div>
+
+          <button type="button" className="music-button" onClick={toggleMusic}>
+            {musicEnabled ? "Pause music" : "Play music"}
+          </button>
         </div>
       </section>
 
@@ -159,15 +208,47 @@ export default function App() {
           <div className="touch-controls" aria-label="Touch controls">
             <div className="dpad">
               <span />
-              <button type="button" onClick={() => handleMoveIntent("up")}>▲</button>
+              <button
+                type="button"
+                onPointerDown={() => startHold("up")}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+              >
+                ▲
+              </button>
               <span />
-              <button type="button" onClick={() => handleMoveIntent("left")}>◀</button>
-              <button type="button" className="touch-center" onClick={handleTrapIntent}>
+              <button
+                type="button"
+                onPointerDown={() => startHold("left")}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+              >
+                ◀
+              </button>
+              <button type="button" className="touch-center" onPointerDown={handleTrapIntent}>
                 Trap
               </button>
-              <button type="button" onClick={() => handleMoveIntent("right")}>▶</button>
+              <button
+                type="button"
+                onPointerDown={() => startHold("right")}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+              >
+                ▶
+              </button>
               <span />
-              <button type="button" onClick={() => handleMoveIntent("down")}>▼</button>
+              <button
+                type="button"
+                onPointerDown={() => startHold("down")}
+                onPointerUp={stopHold}
+                onPointerLeave={stopHold}
+                onPointerCancel={stopHold}
+              >
+                ▼
+              </button>
               <span />
             </div>
           </div>
@@ -179,6 +260,7 @@ export default function App() {
             <ul>
               <li>Move with WASD or the arrow keys.</li>
               <li>On mobile, swipe the arena or use the on-screen buttons.</li>
+              <li>Hold the on-screen buttons for repeated movement.</li>
               <li>Press Space to place a trap after collecting trap charges.</li>
               <li>Avoid walls, obstacles, and active traps.</li>
             </ul>
@@ -198,6 +280,18 @@ export default function App() {
           </div>
         </aside>
       </section>
+
+      <audio
+        ref={audioRef}
+        src={MUSIC_SRC}
+        loop
+        preload="auto"
+        onCanPlayThrough={() => setMusicReady(true)}
+        onPlay={() => setMusicEnabled(true)}
+        onPause={() => setMusicEnabled(false)}
+      />
+
+      {!musicReady ? <p className="music-note">Add your licensed track at <span>client/public/music/background.mp3</span>.</p> : null}
     </main>
   );
 }
