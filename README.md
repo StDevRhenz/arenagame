@@ -1,48 +1,3 @@
-# Real-Time Multiplayer Grid Arena
-
-## Project Structure
-
-```text
-Bubble-Sort/
-├── render.yaml
-├── client/
-│   ├── index.html
-│   ├── package.json
-│   ├── vercel.json
-│   ├── vite.config.js
-│   └── src/
-│       ├── App.jsx
-│       ├── components/
-│       │   └── GameCanvas.jsx
-│       ├── main.jsx
-│       └── styles.css
-└── server/
-    ├── gameState.js
-    ├── index.js
-    ├── package.json
-    └── .env.example
-```
-
-## Environment Variables
-
-### Server (`server/.env`)
-
-```bash
-PORT=4000
-CLIENT_ORIGIN=http://localhost:5173
-GRID_WIDTH=24
-GRID_HEIGHT=18
-TICK_RATE=30
-POWER_UP_SPAWN_INTERVAL_TICKS=45
-MAX_POWER_UPS=8
-OBSTACLE_COUNT=28
-```
-
-### Client (`client/.env`)
-
-```bash
-VITE_SERVER_URL=http://localhost:4000
-```
 
 ## Run Flow
 
@@ -65,8 +20,3 @@ VITE_SERVER_URL=http://localhost:4000
 1. Create a new Vercel project from the `client` directory.
 2. Set `VITE_SERVER_URL` to your Render backend URL, for example `https://grid-arena-server.onrender.com`.
 3. The included `client/vercel.json` keeps client-side routing working if you add routes later.
-
-### CORS
-
-- Express and Socket.io both read `CLIENT_ORIGIN` from the environment.
-- You can provide a comma-separated allow list if you want local development plus production, for example `http://localhost:5173,https://grid-arena.vercel.app`.
