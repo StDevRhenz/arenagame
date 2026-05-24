@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: grid-arena-server
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GRID_WIDTH
+        value: 24
+      - key: GRID_HEIGHT
+        value: 18
+      - key: TICK_RATE
+        value: 30
+      - key: POWER_UP_SPAWN_INTERVAL_TICKS
+        value: 45
+      - key: MAX_POWER_UPS
+        value: 8
+      - key: OBSTACLE_COUNT
+        value: 28
