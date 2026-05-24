@@ -128,28 +128,6 @@ h1 {
   border-top: 1px solid rgba(148, 163, 184, 0.14);
 }
 
-.music-button {
-  grid-column: 1 / -1;
-  margin-top: 4px;
-  border: 1px solid rgba(34, 211, 238, 0.28);
-  border-radius: 14px;
-  padding: 10px 14px;
-  background: rgba(8, 47, 73, 0.75);
-  color: #cffafe;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.music-note {
-  margin: 10px 2px 0;
-  color: #94a3b8;
-  font-size: 13px;
-}
-
-.music-note span {
-  color: #67e8f9;
-}
-
 .status-meta span {
   display: block;
   color: #94a3b8;
@@ -196,54 +174,74 @@ h1 {
 .sidebar {
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 
-.touch-controls {
+.mobile-controls {
   display: none;
-  margin-top: 12px;
 }
 
-.dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 64px);
-  grid-template-rows: repeat(3, 64px);
-  gap: 10px;
-  justify-content: center;
-}
-
-.dpad button {
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  background: rgba(15, 23, 42, 0.88);
-  color: #e2e8f0;
-  font-size: 18px;
-  font-weight: 700;
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
-  touch-action: manipulation;
-}
-
-.dpad button:active {
-  transform: translateY(1px) scale(0.98);
-}
-
-.dpad button:focus-visible,
-.music-button:focus-visible {
+.joystick-base:focus-visible,
+.trap-float-button:focus-visible {
   outline: 2px solid #67e8f9;
   outline-offset: 2px;
-}
-
-.dpad span {
-  display: block;
-}
-
-.touch-center {
-  grid-column: 2;
-  grid-row: 2;
 }
 
 .panel {
   border-radius: 20px;
   padding: 18px;
+}
+
+.dashboard-panel {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.76), rgba(2, 6, 23, 0.56)),
+    rgba(15, 23, 42, 0.7);
+}
+
+.dashboard-eyebrow {
+  margin: 0 0 10px;
+  color: #67e8f9;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.dashboard-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-item {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.dashboard-row strong {
+  color: #f8fafc;
+}
+
+.dashboard-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.dashboard-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee 0%, #67e8f9 52%, #f97316 100%);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
 }
 
 .panel h2 {
@@ -322,12 +320,78 @@ h1 {
     font-size: clamp(2.2rem, 12vw, 3.6rem);
   }
 
-  .touch-controls {
-    display: block;
+  .arena-panel {
+    position: relative;
+    padding-bottom: 120px;
   }
 
-  .dpad {
-    grid-template-columns: repeat(3, minmax(52px, 1fr));
-    grid-template-rows: repeat(3, minmax(52px, 1fr));
+  .mobile-controls {
+    position: fixed;
+    inset: auto 18px 18px 18px;
+    z-index: 20;
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    pointer-events: none;
+  }
+
+  .joystick-base {
+    position: relative;
+    width: 118px;
+    height: 118px;
+    border: 1px solid rgba(103, 232, 249, 0.28);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 50% 50%, rgba(103, 232, 249, 0.16), transparent 38%),
+      rgba(15, 23, 42, 0.72);
+    box-shadow: 0 18px 42px rgba(2, 6, 23, 0.48), inset 0 0 28px rgba(103, 232, 249, 0.1);
+    backdrop-filter: blur(14px);
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .joystick-base.is-active {
+    border-color: rgba(103, 232, 249, 0.58);
+  }
+
+  .joystick-stick {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 54px;
+    height: 54px;
+    margin: -27px 0 0 -27px;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.9), rgba(103, 232, 249, 0.92) 34%, rgba(8, 145, 178, 0.9) 100%);
+    box-shadow: 0 10px 24px rgba(34, 211, 238, 0.28);
+    transition: transform 80ms ease-out;
+    pointer-events: none;
+  }
+
+  .trap-float-button {
+    width: 82px;
+    height: 82px;
+    border: 1px solid rgba(249, 115, 22, 0.42);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 35% 28%, rgba(255, 237, 213, 0.82), rgba(249, 115, 22, 0.86) 42%, rgba(124, 45, 18, 0.9) 100%);
+    color: #fff7ed;
+    font-weight: 800;
+    box-shadow: 0 18px 42px rgba(2, 6, 23, 0.48), 0 0 28px rgba(249, 115, 22, 0.24);
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+
+  .trap-float-button:active {
+    transform: translateY(1px) scale(0.97);
+  }
+
+  .dashboard-row {
+    font-size: 12px;
+  }
+
+  .dashboard-track {
+    height: 8px;
   }
 }
