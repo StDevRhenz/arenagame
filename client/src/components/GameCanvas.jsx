@@ -101,12 +101,32 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
 
     const arenaWidth = gameState.config.width;
     const arenaHeight = gameState.config.height;
-    const fallbackWidth = arenaWidth * 32;
+    const localPlayer = gameState.players.find((player) => player.id === playerId) ?? gameState.players[0] ?? null;
+    const viewportRadius = gameState.config.viewportRadiusTiles ?? 7;
+    const viewportDiameter = viewportRadius * 2 + 1;
+    const fallbackWidth = viewportDiameter * 32;
     const availableWidth = Math.max(containerWidth || fallbackWidth, 320);
-    const tileSize = Math.max(18, Math.floor(availableWidth / arenaWidth));
-    const canvasWidth = arenaWidth * tileSize;
-    const canvasHeight = arenaHeight * tileSize;
+    const tileSize = Math.max(18, Math.floor(availableWidth / viewportDiameter));
+    const canvasWidth = viewportDiameter * tileSize;
+    const canvasHeight = viewportDiameter * tileSize;
     const devicePixelRatio = window.devicePixelRatio || 1;
+    const cameraX = gameState.camera?.x ?? localPlayer?.x ?? Math.floor(arenaWidth / 2);
+    const cameraY = gameState.camera?.y ?? localPlayer?.y ?? Math.floor(arenaHeight / 2);
+    const cameraMinX = cameraX - viewportRadius;
+    const cameraMinY = cameraY - viewportRadius;
+    const cameraMaxX = cameraX + viewportRadius;
+    const cameraMaxY = cameraY + viewportRadius;
+
+    function toScreenPosition(worldX, worldY) {
+      return {
+        x: (worldX - cameraMinX) * tileSize,
+        y: (worldY - cameraMinY) * tileSize,
+      };
+    }
+
+    function isVisible(worldX, worldY) {
+      return worldX >= cameraMinX && worldX <= cameraMaxX && worldY >= cameraMinY && worldY <= cameraMaxY;
+    }
 
     canvas.width = canvasWidth * devicePixelRatio;
     canvas.height = canvasHeight * devicePixelRatio;
@@ -120,7 +140,7 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
 
     const pulse = 0.5 + Math.sin(gameState.tick / 6) * 0.25;
 
-    for (let column = 0; column <= arenaWidth; column += 1) {
+    for (let column = 0; column <= viewportDiameter; column += 1) {
       context.strokeStyle = column % 4 === 0 ? THEME.gridMajor : THEME.gridMinor;
       context.beginPath();
       context.moveTo(column * tileSize + 0.5, 0);
@@ -128,7 +148,7 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
       context.stroke();
     }
 
-    for (let row = 0; row <= arenaHeight; row += 1) {
+    for (let row = 0; row <= viewportDiameter; row += 1) {
       context.strokeStyle = row % 4 === 0 ? THEME.gridMajor : THEME.gridMinor;
       context.beginPath();
       context.moveTo(0, row * tileSize + 0.5);
@@ -137,14 +157,24 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
     }
 
     for (const obstacle of gameState.obstacles) {
+      if (!isVisible(obstacle.x, obstacle.y)) {
+        continue;
+      }
+
+      const screen = toScreenPosition(obstacle.x, obstacle.y);
       context.fillStyle = THEME.obstacle;
-      drawRoundedRect(context, obstacle.x * tileSize + 2, obstacle.y * tileSize + 2, tileSize - 4, tileSize - 4, 6);
+      drawRoundedRect(context, screen.x + 2, screen.y + 2, tileSize - 4, tileSize - 4, 6);
       context.fill();
     }
 
     for (const powerUp of gameState.powerUps) {
-      const centerX = powerUp.x * tileSize + tileSize / 2;
-      const centerY = powerUp.y * tileSize + tileSize / 2;
+      if (!isVisible(powerUp.x, powerUp.y)) {
+        continue;
+      }
+
+      const screen = toScreenPosition(powerUp.x, powerUp.y);
+      const centerX = screen.x + tileSize / 2;
+      const centerY = screen.y + tileSize / 2;
       const radius = tileSize * (0.24 + pulse * 0.08);
 
       context.beginPath();
@@ -158,13 +188,18 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
     }
 
     for (const trap of gameState.traps) {
+      if (!isVisible(trap.x, trap.y)) {
+        continue;
+      }
+
+      const screen = toScreenPosition(trap.x, trap.y);
       const offset = tileSize * 0.18;
       context.fillStyle = THEME.trap;
       context.beginPath();
-      context.moveTo(trap.x * tileSize + tileSize / 2, trap.y * tileSize + offset);
-      context.lineTo(trap.x * tileSize + tileSize - offset, trap.y * tileSize + tileSize / 2);
-      context.lineTo(trap.x * tileSize + tileSize / 2, trap.y * tileSize + tileSize - offset);
-      context.lineTo(trap.x * tileSize + offset, trap.y * tileSize + tileSize / 2);
+      context.moveTo(screen.x + tileSize / 2, screen.y + offset);
+      context.lineTo(screen.x + tileSize - offset, screen.y + tileSize / 2);
+      context.lineTo(screen.x + tileSize / 2, screen.y + tileSize - offset);
+      context.lineTo(screen.x + offset, screen.y + tileSize / 2);
       context.closePath();
       context.fill();
     }
@@ -174,8 +209,13 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
         continue;
       }
 
-      const playerX = player.x * tileSize + 2;
-      const playerY = player.y * tileSize + 2;
+      if (!isVisible(player.x, player.y)) {
+        continue;
+      }
+
+      const screen = toScreenPosition(player.x, player.y);
+      const playerX = screen.x + 2;
+      const playerY = screen.y + 2;
       const isLocalPlayer = player.id === playerId;
 
       context.fillStyle = player.color;
@@ -192,7 +232,7 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
       context.fillStyle = "rgba(255, 255, 255, 0.95)";
       context.font = `${Math.max(10, Math.floor(tileSize * 0.28))}px sans-serif`;
       context.textAlign = "center";
-      context.fillText(player.name, player.x * tileSize + tileSize / 2, player.y * tileSize - 4);
+      context.fillText(player.name, screen.x + tileSize / 2, screen.y - 4);
     }
 
     context.fillStyle = "rgba(15, 23, 42, 0.88)";
@@ -200,8 +240,9 @@ export default function GameCanvas({ gameState, playerId, onMoveIntent, onTrapIn
     context.fillStyle = "#e2e8f0";
     context.font = "13px sans-serif";
     context.textAlign = "left";
+    const visiblePlayers = gameState.players.filter((player) => player.alive && isVisible(player.x, player.y)).length;
     context.fillText(
-      `Tick ${gameState.tick} | Players ${gameState.players.filter((player) => player.alive).length} | Power-ups ${gameState.powerUps.length}`,
+      `Tick ${gameState.tick} | Visible players ${visiblePlayers} | Relevance ${gameState.config.networkRadiusTiles ?? 10}`,
       12,
       canvasHeight - 12,
     );

@@ -9,6 +9,10 @@ const DEFAULT_CONFIG = {
   maxPowerUps: 8,
   obstacleCount: 28,
   trapLifetimeTicks: 180,
+  automataSteps: 5,
+  wallFillChance: 0.44,
+  viewportRadiusTiles: 7,
+  networkRadiusTiles: 10,
 };
 
 const DIRECTION_VECTORS = {
@@ -47,25 +51,110 @@ function pickFromPalette(seed) {
   return PLAYER_COLORS[numericSeed % PLAYER_COLORS.length];
 }
 
-function createObstacleLayout(config) {
-  const obstacles = [];
-  const used = new Set();
-  const targetCount = clamp(config.obstacleCount, 0, config.width * config.height - 1);
+function createEmptyGrid(config) {
+  return Array.from({ length: config.height }, () => Array.from({ length: config.width }, () => 0));
+}
 
-  while (obstacles.length < targetCount) {
-    const x = 1 + randomInt(Math.max(1, config.width - 2));
-    const y = 1 + randomInt(Math.max(1, config.height - 2));
-    const key = createKey(x, y);
+function createInitialWallGrid(config) {
+  const grid = createEmptyGrid(config);
 
-    if (used.has(key)) {
-      continue;
+  for (let y = 0; y < config.height; y += 1) {
+    for (let x = 0; x < config.width; x += 1) {
+      if (x === 0 || y === 0 || x === config.width - 1 || y === config.height - 1) {
+        grid[y][x] = 1;
+        continue;
+      }
+
+      grid[y][x] = Math.random() < config.wallFillChance ? 1 : 0;
     }
+  }
 
-    used.add(key);
-    obstacles.push({ x, y });
+  return grid;
+}
+
+function countWallNeighbors(grid, x, y) {
+  let wallCount = 0;
+
+  for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+    for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+      if (offsetX === 0 && offsetY === 0) {
+        continue;
+      }
+
+      const neighborX = x + offsetX;
+      const neighborY = y + offsetY;
+
+      if (neighborX < 0 || neighborY < 0 || neighborX >= grid[0].length || neighborY >= grid.length) {
+        wallCount += 1;
+        continue;
+      }
+
+      wallCount += grid[neighborY][neighborX] === 1 ? 1 : 0;
+    }
+  }
+
+  return wallCount;
+}
+
+function stepCellularAutomata(grid, config) {
+  const nextGrid = createEmptyGrid(config);
+
+  for (let y = 0; y < config.height; y += 1) {
+    for (let x = 0; x < config.width; x += 1) {
+      if (x === 0 || y === 0 || x === config.width - 1 || y === config.height - 1) {
+        nextGrid[y][x] = 1;
+        continue;
+      }
+
+      const wallNeighbors = countWallNeighbors(grid, x, y);
+      const isWall = grid[y][x] === 1;
+      nextGrid[y][x] = isWall ? (wallNeighbors >= 4 ? 1 : 0) : (wallNeighbors >= 5 ? 1 : 0);
+    }
+  }
+
+  return nextGrid;
+}
+
+function clearSpawnArea(grid, centerX, centerY, radius) {
+  for (let y = centerY - radius; y <= centerY + radius; y += 1) {
+    for (let x = centerX - radius; x <= centerX + radius; x += 1) {
+      if (y < 0 || x < 0 || y >= grid.length || x >= grid[0].length) {
+        continue;
+      }
+
+      grid[y][x] = 0;
+    }
+  }
+}
+
+function gridToObstacles(grid) {
+  const obstacles = [];
+
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < grid[y].length; x += 1) {
+      if (grid[y][x] === 1) {
+        obstacles.push({ x, y });
+      }
+    }
   }
 
   return obstacles;
+}
+
+function generateCellularAutomataObstacles(config) {
+  let grid = createInitialWallGrid(config);
+
+  for (let step = 0; step < config.automataSteps; step += 1) {
+    grid = stepCellularAutomata(grid, config);
+  }
+
+  clearSpawnArea(grid, Math.floor(config.width / 2), Math.floor(config.height / 2), 2);
+  clearSpawnArea(grid, 2, 2, 1);
+  clearSpawnArea(grid, config.width - 3, 2, 1);
+  clearSpawnArea(grid, 2, config.height - 3, 1);
+  clearSpawnArea(grid, config.width - 3, config.height - 3, 1);
+
+  return gridToObstacles(grid);
 }
 
 export function createGameState(overrides = {}) {
@@ -74,10 +163,12 @@ export function createGameState(overrides = {}) {
     ...overrides,
   };
 
+  const obstacles = generateCellularAutomataObstacles(config);
+
   return {
     tick: 0,
     config,
-    obstacles: createObstacleLayout(config),
+    obstacles,
     players: {},
     powerUps: [],
     traps: [],
@@ -382,25 +473,79 @@ export function advanceGameState(state) {
   }
 }
 
+function serializePlayer(player) {
+  return {
+    id: player.id,
+    name: player.name,
+    color: player.color,
+    x: player.x,
+    y: player.y,
+    direction: player.direction,
+    score: player.score,
+    trapCharges: player.trapCharges,
+    cooldownTicks: player.cooldownTicks,
+    blockedTicks: player.blockedTicks,
+    stunTicks: player.stunTicks,
+    respawnTicks: player.respawnTicks,
+    alive: player.alive,
+  };
+}
+
+function createBounds(centerX, centerY, radius, state) {
+  return {
+    minX: clamp(centerX - radius, 0, state.config.width - 1),
+    maxX: clamp(centerX + radius, 0, state.config.width - 1),
+    minY: clamp(centerY - radius, 0, state.config.height - 1),
+    maxY: clamp(centerY + radius, 0, state.config.height - 1),
+  };
+}
+
+function isEntityWithinBounds(entity, bounds) {
+  return entity.x >= bounds.minX && entity.x <= bounds.maxX && entity.y >= bounds.minY && entity.y <= bounds.maxY;
+}
+
+function filterEntitiesByBounds(entities, bounds) {
+  return entities.filter((entity) => isEntityWithinBounds(entity, bounds));
+}
+
+export function getScopedState(state, viewerId) {
+  const viewer = state.players[viewerId];
+
+  if (!viewer) {
+    return getPublicState(state);
+  }
+
+  const relevanceRadius = state.config.networkRadiusTiles;
+  const viewportRadius = state.config.viewportRadiusTiles;
+  const bounds = createBounds(viewer.x, viewer.y, relevanceRadius, state);
+
+  return {
+    tick: state.tick,
+    config: {
+      ...state.config,
+      relevanceRadiusTiles: relevanceRadius,
+      viewportRadiusTiles: viewportRadius,
+    },
+    camera: {
+      x: viewer.x,
+      y: viewer.y,
+      viewportRadiusTiles: viewportRadius,
+      relevanceRadiusTiles: relevanceRadius,
+      bounds,
+    },
+    viewerId,
+    players: filterEntitiesByBounds(Object.values(state.players).map(serializePlayer), bounds),
+    obstacles: filterEntitiesByBounds(state.obstacles, bounds),
+    powerUps: filterEntitiesByBounds(state.powerUps, bounds),
+    traps: filterEntitiesByBounds(state.traps, bounds),
+  };
+}
+
 export function getPublicState(state) {
   return {
     tick: state.tick,
     config: state.config,
-    players: Object.values(state.players).map((player) => ({
-      id: player.id,
-      name: player.name,
-      color: player.color,
-      x: player.x,
-      y: player.y,
-      direction: player.direction,
-      score: player.score,
-      trapCharges: player.trapCharges,
-      cooldownTicks: player.cooldownTicks,
-      blockedTicks: player.blockedTicks,
-      stunTicks: player.stunTicks,
-      respawnTicks: player.respawnTicks,
-      alive: player.alive,
-    })),
+    players: Object.values(state.players).map(serializePlayer),
     obstacles: state.obstacles,
     powerUps: state.powerUps,
     traps: state.traps,

@@ -4,7 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import http from "http";
 import { Server } from "socket.io";
-import { addPlayer, advanceGameState, createGameState, getPublicState, queueMoveIntent, queueTrapIntent, removePlayer } from "./gameState.js";
+import { addPlayer, advanceGameState, createGameState, getScopedState, queueMoveIntent, queueTrapIntent, removePlayer } from "./gameState.js";
 
 dotenv.config();
 
@@ -67,7 +67,9 @@ const io = new Server(server, {
 });
 
 function emitState() {
-  io.emit("game:state", getPublicState(gameState));
+  for (const socket of io.sockets.sockets.values()) {
+    socket.emit("game:state", getScopedState(gameState, socket.id));
+  }
 }
 
 io.on("connection", (socket) => {
@@ -78,7 +80,7 @@ io.on("connection", (socket) => {
 
   socket.emit("game:welcome", {
     playerId: socket.id,
-    state: getPublicState(gameState),
+    state: getScopedState(gameState, socket.id),
     config: {
       tickRate: TICK_RATE,
       arena: {
